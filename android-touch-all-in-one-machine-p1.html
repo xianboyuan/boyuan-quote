@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Product Configuration Tool - Android touch all in one machine</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <style>
 :root{--primary:#1677ff;--primary-hover:#4096ff;--primary-light:#e6f4ff;--success:#52c41a;--success-light:#f0fff0;--warning:#faad14;--warning-light:#fffbe6;--danger:#ff4d4f;--danger-hover:#ff7875;--gray-50:#fafafa;--gray-100:#f5f5f5;--gray-200:#e8e8e8;--gray-300:#d9d9d9;--gray-500:#8c8c8c;--gray-700:#595959;--gray-900:#262626;--text:#1f1f1f;--text-secondary:#666;--radius:8px;--radius-sm:4px;--shadow:0 2px 8px rgba(0,0,0,0.08);--shadow-lg:0 4px 16px rgba(0,0,0,0.12);--transition:all 0.2s ease}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -208,6 +209,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:8px 12px;text-align:left
 <p style="font-size:13px;color:var(--text-secondary);margin-top:0;margin-bottom:12px">Please review your selections and submit your inquiry using one of the options below.</p>
 <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
 <button class="btn-primary" onclick="sendWhatsApp()">📱 Send via WhatsApp</button>
+<button class="btn-primary" onclick="sendWhatsAppBusiness()">💼 Send via WA Business</button>
 <button class="btn-primary" onclick="sendEmail()">📧 Send via Email</button>
 <button class="btn-primary" onclick="copyOrder()">📋 Copy Order Details</button>
 <button class="btn-export" onclick="downloadExcel()">📊 Download Excel</button>
@@ -260,31 +262,16 @@ document.getElementById("grandTotal").textContent="$"+state.total.toFixed(2);
 function updateCardState(){var ok=true;PRODUCT.specs.forEach(function(s){if(s.required&&!state.specSel[s.name])ok=false});PRODUCT.options.forEach(function(o){if(o.required&&(!state.optSel[o.name]||(Array.isArray(state.optSel[o.name])&&state.optSel[o.name].length===0)))ok=false});var c=document.getElementById("productCard");if(ok){c.classList.remove("card-incomplete");c.classList.add("card-complete")}else{c.classList.remove("card-complete");c.classList.add("card-incomplete")}}
 function collectOrder(){return{specSelections:state.specSel,optionSelections:state.optSel,quantity:state.qty,unitPrice:state.unitPrice,subtotal:state.total,total:state.total,companyName:"Xi'an Boyuan Industry Co., Ltd.",contact:"",email:"elaine@xaby.net.cn",phone:"+8618109212223",requirements:document.getElementById("custRequirements").value}}
 function buildText(o){var t="=== Order Inquiry ===\n\n";t+="Product: "+PRODUCT.name+"\n";t+="Company: "+(o.companyName||"N/A")+"\n";t+="Contact: "+(o.contact||"N/A")+"\n";t+="Email: "+(o.email||"N/A")+"\n";t+="Phone: "+(o.phone||"N/A")+"\n\n";t+="--- Specs ---\n";t+="Specs: "+JSON.stringify(o.specSelections)+"\n";t+="Options: "+JSON.stringify(o.optionSelections)+"\n";t+="Qty: "+o.quantity+" x $"+o.unitPrice.toFixed(2)+" = $"+o.total.toFixed(2)+"\n\n";t+="--- Details ---\n";t+="Requirements: "+(o.requirements||"None")+"\n";return t}
-function sendWhatsApp(){var o=collectOrder();var wa="+8618109212223";if(!wa){showToast("WhatsApp number not configured","error");return}window.open("https://wa.me/"+wa+"?text="+encodeURIComponent(buildText(o)),"_blank")}
-function sendEmail(){var o=collectOrder();var em="elaine@xaby.net.cn";if(!em){showToast("Email not configured","error");return}window.location.href="mailto:"+encodeURIComponent(em)+"?subject=Order Inquiry - "+(o.companyName||o.contact||"Client")+"&body="+encodeURIComponent(buildText(o))}
+function generateExcelBlob(o){if(typeof XLSX==="undefined"){return null}var s=[["Order Summary"],["Product",PRODUCT.name],["Company",o.companyName||""],["Contact",o.contact||""],["Email",o.email||""],["Phone",o.phone||""],["Grand Total (USD)",o.total.toFixed(2)],["Requirements",o.requirements||""]];var ws1=XLSX.utils.aoa_to_sheet(s);var it=[["名称 / Name","规格型号 / Model","Price (USD)"]];var rows=[];rows.push(["Base Price",PRODUCT.name,PRODUCT.basePrice||0]);PRODUCT.specs.forEach(function(sp){var v=o.specSelections[sp.name];if(v){var opt=sp.options.find(function(x){return x.name===v});if(opt)rows.push([sp.name,opt.name,opt.surcharge||0])}});PRODUCT.options.forEach(function(og){var v=o.optionSelections[og.name];if(v&&Array.isArray(v)){v.forEach(function(sv){var opt=og.options.find(function(x){return x.name===sv});if(opt)rows.push([og.name,opt.name,opt.surcharge||0])})}else if(v){var opt=og.options.find(function(x){return x.name===v});if(opt)rows.push([og.name,opt.name,opt.surcharge||0])}});rows.forEach(function(r){it.push([r[0],r[1],r[2].toFixed(2)])});it.push(["","Unit Price (x "+o.quantity+")",o.unitPrice.toFixed(2)]);it.push(["","Total (USD)",o.total.toFixed(2)]);var ws2=XLSX.utils.aoa_to_sheet(it);var lg=[["Logistics"],["Contact",o.contact||""],["Consignee",o.companyName||""],["Address",""],["ZIP Code",""],["Phone",o.phone||""],["Email",o.email||""],["Requirements",o.requirements||""]];var ws3=XLSX.utils.aoa_to_sheet(lg);var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws1,"Order Summary");XLSX.utils.book_append_sheet(wb,ws2,"Line Items");XLSX.utils.book_append_sheet(wb,ws3,"Logistics");var arr=XLSX.write(wb,{type:"array",bookType:"xlsx"});return new Blob([arr],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})}
+function generateCsvBlob(o){var csv="Order Summary\n";csv+="Product,"+PRODUCT.name+"\n";csv+="Company,"+(o.companyName||"")+"\n";csv+="Contact,"+(o.contact||"")+"\n";csv+="Email,"+(o.email||"")+"\n";csv+="Phone,"+(o.phone||"")+"\n\n";csv+="Line Items\n";csv+="Name,Model,Price (USD)\n";var rows=[];rows.push(["Base Price",PRODUCT.name,PRODUCT.basePrice||0]);PRODUCT.specs.forEach(function(s){var v=o.specSelections[s.name];if(v){var opt=s.options.find(function(x){return x.name===v});if(opt)rows.push([s.name,opt.name,opt.surcharge||0])}});PRODUCT.options.forEach(function(og){var v=o.optionSelections[og.name];if(v&&Array.isArray(v)){v.forEach(function(sv){var opt=og.options.find(function(x){return x.name===sv});if(opt)rows.push([og.name,opt.name,opt.surcharge||0])})}else if(v){var opt=og.options.find(function(x){return x.name===v});if(opt)rows.push([og.name,opt.name,opt.surcharge||0])}});rows.forEach(function(r){csv+=r[0]+","+r[1]+","+r[2].toFixed(2)+"\n"});csv+=",Unit Price (x "+o.quantity+"),"+o.unitPrice.toFixed(2)+"\n";csv+=",Total (USD),"+o.total.toFixed(2)+"\n\n";csv+="Logistics\n";csv+="Requirements,"+(o.requirements||"")+"\n";csv+="Grand Total (USD),"+o.total.toFixed(2)+"\n";return new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"})}
+function triggerDownload(blob,fileName){var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=fileName;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(a.href)},2000)}
+function getOrderFileName(o,ext){ext=ext||"xlsx";return "Order-"+(o.companyName||"Client").replace(/[^a-zA-Z0-9]/g,"").substr(0,20)+"-"+fmtDate()+"."+ext}
+function shareOrderExcel(channel){var o=collectOrder();var text=buildText(o);var blob=generateExcelBlob(o);var fileName,file;var cn=channel==="wabusiness"?"WhatsApp Business":(channel==="whatsapp"?"WhatsApp":"Email");if(blob){fileName=getOrderFileName(o,"xlsx");file=new File([blob],fileName,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})}else{blob=generateCsvBlob(o);fileName=getOrderFileName(o,"csv");file=new File([blob],fileName,{type:"text/csv;charset=utf-8"})}if(navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file],text:text,title:"Order Inquiry"}).then(function(){showToast("Order shared via "+cn,"success")}).catch(function(e){if(e.name!=="AbortError"){triggerDownload(blob,fileName);showToast("Share failed. File downloaded.","info")}})}else{triggerDownload(blob,fileName);if(channel==="whatsapp"||channel==="wabusiness"){var wa=(o.phone||"").replace(/[^0-9+]/g,"");if(wa){var pt="I have prepared an order file (downloaded). Please see the attachment.";setTimeout(function(){window.open("https://wa.me/"+wa+"?text="+encodeURIComponent(pt),"_blank")},500)}}else if(channel==="email"){var em=o.email||"";if(em){var sub="Order Inquiry - "+(o.companyName||"Client");setTimeout(function(){window.location.href="mailto:"+encodeURIComponent(em)+"?subject="+encodeURIComponent(sub)+"&body="+encodeURIComponent("Please find the attached order file.\n\n"+text)},500)}}showToast("File downloaded. Please attach in "+cn+" manually.","info")}}
+function sendWhatsApp(){shareOrderExcel("whatsapp")}
+function sendWhatsAppBusiness(){shareOrderExcel("wabusiness")}
+function sendEmail(){shareOrderExcel("email")}
 function copyOrder(){var o=collectOrder();navigator.clipboard.writeText(buildText(o)).then(function(){showToast("Order copied to clipboard","success")}).catch(function(){showToast("Failed to copy","error")})}
-function downloadExcel(){
-var o=collectOrder();
-var csv="Order Summary\n";
-csv+="Product,"+PRODUCT.name+"\n";
-csv+="Company,"+(o.companyName||"")+"\n";
-csv+="Contact,"+(o.contact||"")+"\n";
-csv+="Email,"+(o.email||"")+"\n";
-csv+="Phone,"+(o.phone||"")+"\n\n";
-csv+="Line Items\n";
-csv+="Name,Model,Price (USD)\n";
-var rows=[];rows.push(["Base Price",PRODUCT.name,PRODUCT.basePrice||0]);
-PRODUCT.specs.forEach(function(s){var v=o.specSelections[s.name];if(v){var opt=s.options.find(function(x){return x.name===v});if(opt)rows.push([s.name,opt.name,opt.surcharge||0])}});
-PRODUCT.options.forEach(function(og){var v=o.optionSelections[og.name];if(v&&Array.isArray(v)){v.forEach(function(sv){var opt=og.options.find(function(x){return x.name===sv});if(opt)rows.push([og.name,opt.name,opt.surcharge||0])})}else if(v){var opt=og.options.find(function(x){return x.name===v});if(opt)rows.push([og.name,opt.name,opt.surcharge||0])}});
-rows.forEach(function(r){csv+=r[0]+","+r[1]+","+r[2].toFixed(2)+"\n"});
-csv+=",Unit Price (× "+o.quantity+"),"+o.unitPrice.toFixed(2)+"\n";
-csv+=",Total (USD),"+o.total.toFixed(2)+"\n\n";
-csv+="Logistics\n";
-csv+="Requirements,"+(o.requirements||"")+"\n";
-csv+="Grand Total (USD),"+o.total.toFixed(2)+"\n";
-var blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
-var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="Order-20260720.csv";a.click();
-URL.revokeObjectURL(a.href);showToast("Excel (CSV) downloaded","success")}
+function downloadExcel(){var o=collectOrder();var blob=generateExcelBlob(o);if(blob){triggerDownload(blob,getOrderFileName(o,"xlsx"));showToast("Excel downloaded","success")}else{blob=generateCsvBlob(o);triggerDownload(blob,getOrderFileName(o,"csv"));showToast("Excel (CSV) downloaded — sheetjs unavailable","success")}}
 function openLightbox(s){var o=document.createElement("div");o.className="lightbox-overlay";var cl=document.createElement("span");cl.className="lightbox-close";cl.textContent="✕";o.appendChild(cl);var i=document.createElement("img");i.src=s;o.appendChild(i);o.addEventListener("click",function(e){if(e.target!==i)o.remove()});cl.addEventListener("click",function(){o.remove()});document.body.appendChild(o)}
 document.addEventListener("click",function(e){var t=e.target;if(t.tagName==="IMG"&&(t.parentElement.classList.contains("img-thumb")||t.parentElement.classList.contains("opt-thumb"))){e.stopPropagation();openLightbox(t.src)}})
 </script>
